@@ -2,7 +2,7 @@ use super::compiler::{Char, Ins, Instruction, Position};
 
 type PC = usize;
 type SP = usize;
-type Context = (PC, SP);
+type Context = (PC, SP, usize);
 
 // substring match
 pub fn search(ins: &Ins, text: String) -> Option<Vec<(usize, usize)>> {
@@ -19,7 +19,7 @@ pub fn search(ins: &Ins, text: String) -> Option<Vec<(usize, usize)>> {
 fn search_impl(ins: &Ins, from: usize, text: &[char]) -> Option<Vec<(usize, usize)>> {
     let mut thread_stack: Vec<Context> = Vec::new();
     let mut ret: Vec<(usize, usize)> = Vec::new();
-    let mut group_paren_l = None;
+    let mut group_paren_l = Vec::new();
 
     let mut pc: PC = 0;
     let mut sp: SP = from;
@@ -51,6 +51,7 @@ fn search_impl(ins: &Ins, from: usize, text: &[char]) -> Option<Vec<(usize, usiz
                     let context = thread_stack.pop()?;
                     pc = context.0;
                     sp = context.1;
+                    group_paren_l.truncate(context.2);
                 }
             }
             MatchPos(p) => match p {
@@ -61,6 +62,7 @@ fn search_impl(ins: &Ins, from: usize, text: &[char]) -> Option<Vec<(usize, usiz
                         let context = thread_stack.pop()?;
                         pc = context.0;
                         sp = context.1;
+                        group_paren_l.truncate(context.2);
                     }
                 }
                 Position::Back => {
@@ -70,24 +72,24 @@ fn search_impl(ins: &Ins, from: usize, text: &[char]) -> Option<Vec<(usize, usiz
                         let context = thread_stack.pop()?;
                         pc = context.0;
                         sp = context.1;
+                        group_paren_l.truncate(context.2);
                     }
                 }
             },
             Branch(x, y) => {
-                thread_stack.push((*y as usize, sp));
+                thread_stack.push((*y as usize, sp, group_paren_l.len()));
                 pc = *x as usize;
             }
             Jump(x) => {
                 pc = *x as usize;
             }
             GroupParenL => {
-                group_paren_l = Some(sp);
+                group_paren_l.push(sp);
                 pc += 1;
             }
             GroupParenR => {
-                let left = group_paren_l?;
+                let left = group_paren_l.pop()?;
                 ret.push((left, sp));
-                group_paren_l = None;
                 pc += 1;
             }
             Finish => {
